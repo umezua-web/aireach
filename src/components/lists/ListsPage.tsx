@@ -33,6 +33,8 @@ export default function ListsPage() {
   const [selectedMajors, setSelectedMajors] = useState<string[]>([])
   const [selectedMinors, setSelectedMinors] = useState<string[]>([])
   const [selectedPrefs, setSelectedPrefs] = useState<string[]>([])
+  const [selectedEmps, setSelectedEmps]   = useState<string[]>([])
+  const [selectedRevs, setSelectedRevs]   = useState<string[]>([])
   const [noHp, setNoHp]                   = useState(false)
   const [noPhone, setNoPhone]             = useState(false)
   const [companies, setCompanies]         = useState<Company[]>([])
@@ -41,6 +43,8 @@ export default function ListsPage() {
   const [filterOpts, setFilterOpts]       = useState<FilterOptions | null>(null)
   const [showIndustryDlg, setShowIndustryDlg] = useState(false)
   const [showPrefDlg, setShowPrefDlg]     = useState(false)
+  const [showEmpDlg, setShowEmpDlg]       = useState(false)
+  const [showRevDlg, setShowRevDlg]       = useState(false)
 
   useEffect(() => {
     fetch('/api/filter-options').then(r => r.json()).then(setFilterOpts)
@@ -53,6 +57,8 @@ export default function ListsPage() {
     selectedMajors.forEach(m => params.append('major', m))
     selectedMinors.forEach(m => params.append('minor', m))
     selectedPrefs.forEach(p => params.append('pref', p))
+    selectedEmps.forEach(e => params.append('emp', e))
+    selectedRevs.forEach(r => params.append('rev', r))
     if (noHp)    params.set('no_hp', '1')
     if (noPhone) params.set('no_phone', '1')
     params.set('limit', '500')
@@ -62,14 +68,15 @@ export default function ListsPage() {
     setCompanies(json.data ?? [])
     setCount(json.count ?? 0)
     setLoading(false)
-  }, [keyword, selectedMajors, selectedMinors, selectedPrefs, noHp, noPhone])
+  }, [keyword, selectedMajors, selectedMinors, selectedPrefs, selectedEmps, selectedRevs, noHp, noPhone])
 
   useEffect(() => { search() }, [search])
 
   function clearAll() {
     setKeyword(''); setInputVal('')
     setSelectedMajors([]); setSelectedMinors([])
-    setSelectedPrefs([]); setNoHp(false); setNoPhone(false)
+    setSelectedPrefs([]); setSelectedEmps([]); setSelectedRevs([])
+    setNoHp(false); setNoPhone(false)
   }
 
   const industryLabel = () => {
@@ -85,8 +92,20 @@ export default function ListsPage() {
     return `${selectedPrefs[0]} 他${selectedPrefs.length - 1}件`
   }
 
+  const empLabel = () => {
+    if (selectedEmps.length === 0) return '従業員数'
+    if (selectedEmps.length === 1) return selectedEmps[0]
+    return `従業員数 (${selectedEmps.length})`
+  }
+
+  const revLabel = () => {
+    if (selectedRevs.length === 0) return '売上'
+    if (selectedRevs.length === 1) return selectedRevs[0]
+    return `売上 (${selectedRevs.length})`
+  }
+
   const hasFilters = keyword || selectedMajors.length || selectedMinors.length ||
-    selectedPrefs.length || noHp || noPhone
+    selectedPrefs.length || selectedEmps.length || selectedRevs.length || noHp || noPhone
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
@@ -123,7 +142,7 @@ export default function ListsPage() {
 
           {/* 都道府県 */}
           <button
-            onClick={() => setShowPrefDlg(v => !v)}
+            onClick={() => { setShowPrefDlg(v => !v); setShowEmpDlg(false); setShowRevDlg(false) }}
             className={`flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg border transition-colors ${
               selectedPrefs.length
                 ? 'border-black bg-black text-white'
@@ -154,6 +173,80 @@ export default function ListsPage() {
               </div>
               <div className="flex justify-end mt-2 pt-2 border-t border-gray-100">
                 <button onClick={() => setShowPrefDlg(false)}
+                  className="px-3 py-1 bg-black text-white text-xs rounded-lg">適用</button>
+              </div>
+            </div>
+          )}
+
+          {/* 従業員数 */}
+          <button
+            onClick={() => { setShowEmpDlg(v => !v); setShowRevDlg(false); setShowPrefDlg(false) }}
+            className={`flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg border transition-colors ${
+              selectedEmps.length
+                ? 'border-black bg-black text-white'
+                : 'border-gray-200 text-gray-700 hover:border-gray-400'
+            }`}
+          >
+            {empLabel()}
+            <ChevronDown size={13} />
+          </button>
+
+          {showEmpDlg && filterOpts?.employee_range && (
+            <div className="absolute top-16 z-40 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-52">
+              <div className="flex flex-col gap-0.5">
+                {filterOpts.employee_range.map(e => (
+                  <label key={e} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedEmps.includes(e)}
+                      onChange={ev => setSelectedEmps(prev =>
+                        ev.target.checked ? [...prev, e] : prev.filter(x => x !== e)
+                      )}
+                      className="rounded"
+                    />
+                    <span className="text-sm text-gray-700">{e}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="flex justify-end mt-2 pt-2 border-t border-gray-100">
+                <button onClick={() => setShowEmpDlg(false)}
+                  className="px-3 py-1 bg-black text-white text-xs rounded-lg">適用</button>
+              </div>
+            </div>
+          )}
+
+          {/* 売上 */}
+          <button
+            onClick={() => { setShowRevDlg(v => !v); setShowEmpDlg(false); setShowPrefDlg(false) }}
+            className={`flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg border transition-colors ${
+              selectedRevs.length
+                ? 'border-black bg-black text-white'
+                : 'border-gray-200 text-gray-700 hover:border-gray-400'
+            }`}
+          >
+            {revLabel()}
+            <ChevronDown size={13} />
+          </button>
+
+          {showRevDlg && filterOpts?.revenue_range && (
+            <div className="absolute top-16 z-40 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-52">
+              <div className="flex flex-col gap-0.5">
+                {filterOpts.revenue_range.map(r => (
+                  <label key={r} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedRevs.includes(r)}
+                      onChange={ev => setSelectedRevs(prev =>
+                        ev.target.checked ? [...prev, r] : prev.filter(x => x !== r)
+                      )}
+                      className="rounded"
+                    />
+                    <span className="text-sm text-gray-700">{r}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="flex justify-end mt-2 pt-2 border-t border-gray-100">
+                <button onClick={() => setShowRevDlg(false)}
                   className="px-3 py-1 bg-black text-white text-xs rounded-lg">適用</button>
               </div>
             </div>
