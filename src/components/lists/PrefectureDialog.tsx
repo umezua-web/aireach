@@ -117,7 +117,7 @@ export default function PrefectureDialog({ allPrefs, selected, onConfirm, onClos
                         className="rounded border-gray-300 text-black focus:ring-black flex-shrink-0"
                       />
                       <span className="text-xs text-gray-600 group-hover:text-gray-900 transition-colors">
-                        {p.replace('都','').replace('道','').replace('府','').replace('県','')}
+                        {p === '北海道' ? p : p.replace(/[都府県]$/, '')}
                       </span>
                     </label>
                   ))}

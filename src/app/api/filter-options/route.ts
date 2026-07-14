@@ -1,28 +1,9 @@
-import { createAdminClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import filterOptions from '@/data/filter-options.json'
 
-// フィルタ選択肢はキャッシュテーブルから読む（39万行の都度集計はタイムアウトするため）
-// キャッシュは supabase/migrations/003_filter_cache.sql で生成・更新する
+// フィルタ選択肢はビルド時に同梱した静的マスターから返す。
+// 39万行の都度集計（get_filter_options RPC）はSupabaseの8秒タイムアウトに掛かるため廃止。
+// マスターの再生成: node scripts/build-filter-options.mjs
 export async function GET() {
-  const supabase = await createAdminClient()
-
-  const { data: cached, error: cacheErr } = await supabase
-    .from('filter_options_cache')
-    .select('data')
-    .eq('id', 1)
-    .single()
-
-  if (!cacheErr && cached?.data) {
-    return NextResponse.json(cached.data)
-  }
-
-  // キャッシュ未生成時のフォールバック（タイムアウトする可能性あり）
-  const { data, error } = await supabase.rpc('get_filter_options')
-  if (error) {
-    return NextResponse.json(
-      { error: `フィルタ選択肢が未生成です。003_filter_cache.sql を実行してください。(${error.message})` },
-      { status: 500 }
-    )
-  }
-  return NextResponse.json(data)
+  return NextResponse.json(filterOptions)
 }
