@@ -5,6 +5,7 @@ import { X, Globe, Phone, Mail, ChevronDown, ChevronUp, Download, BookmarkPlus }
 import IndustryDialog    from './IndustryDialog'
 import PrefectureDialog  from './PrefectureDialog'
 import SaveListDialog    from './SaveListDialog'
+import FeatureTagDialog, { TAG_GROUPS, type TagMode } from './FeatureTagDialog'
 
 type Company = {
   houjin_bangou: string
@@ -68,6 +69,8 @@ export default function ListsPage() {
   const [yearTo, setYearTo]               = useState('')
   const [noHp, setNoHp]                   = useState(false)
   const [noPhone, setNoPhone]             = useState(false)
+  const [selectedTags, setSelectedTags]   = useState<string[]>([])
+  const [tagMode, setTagMode]             = useState<TagMode>('any')
 
   // 結果
   const [companies, setCompanies] = useState<Company[]>([])
@@ -76,13 +79,21 @@ export default function ListsPage() {
   const [searched, setSearched]   = useState(false)
 
   const [filterOpts, setFilterOpts] = useState<FilterOptions | null>(null)
+  const [optsError, setOptsError]   = useState('')
   const [showIndustryDlg, setShowIndustryDlg] = useState(false)
   const [showPrefDlg, setShowPrefDlg]         = useState(false)
+  const [showTagDlg, setShowTagDlg]           = useState(false)
   const [showSaveDlg, setShowSaveDlg]         = useState(false)
   const [savedNotice, setSavedNotice]         = useState('')
 
   useEffect(() => {
-    fetch('/api/filter-options').then(r => r.json()).then(setFilterOpts)
+    fetch('/api/filter-options')
+      .then(r => r.json())
+      .then(j => {
+        if (j.error) setOptsError(j.error)
+        else setFilterOpts(j)
+      })
+      .catch(() => setOptsError('フィルタ選択肢の取得に失敗しました'))
   }, [])
 
   const search = useCallback(async () => {
@@ -101,6 +112,8 @@ export default function ListsPage() {
     if (yearTo)   params.set('year_to', yearTo)
     if (noHp)     params.set('no_hp', '1')
     if (noPhone)  params.set('no_phone', '1')
+    selectedTags.forEach(t => params.append('tag', t))
+    if (selectedTags.length) params.set('tag_mode', tagMode)
     params.set('limit', '500')
 
     const res = await fetch(`/api/companies?${params}`)
@@ -108,7 +121,7 @@ export default function ListsPage() {
     setCompanies(json.data ?? [])
     setCount(json.count ?? 0)
     setLoading(false)
-  }, [nameKw, hpKw, phoneKw, selectedMajors, selectedMinors, selectedPrefs, selectedEmps, selectedRevs, yearFrom, yearTo, noHp, noPhone])
+  }, [nameKw, hpKw, phoneKw, selectedMajors, selectedMinors, selectedPrefs, selectedEmps, selectedRevs, yearFrom, yearTo, noHp, noPhone, selectedTags, tagMode])
 
   // 初回のみ全件表示
   useEffect(() => { search() /* eslint-disable-line react-hooks/exhaustive-deps */ }, [])
@@ -119,6 +132,7 @@ export default function ListsPage() {
     setSelectedPrefs([]); setSelectedEmps([]); setSelectedRevs([])
     setYearFrom(''); setYearTo('')
     setNoHp(false); setNoPhone(false)
+    setSelectedTags([]); setTagMode('any')
   }
 
   function exportCsv() {
@@ -161,6 +175,12 @@ export default function ListsPage() {
         <div className="px-4 py-3 border-b border-gray-100 flex-shrink-0">
           <h2 className="text-sm font-semibold text-gray-900">条件検索</h2>
         </div>
+
+        {optsError && (
+          <div className="mx-3 mt-2 text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+            {optsError}
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto">
           {/* 企業名 */}
@@ -250,6 +270,25 @@ export default function ListsPage() {
                 </label>
               ))}
             </div>
+          </FilterSection>
+
+          {/* 特徴タグ */}
+          <FilterSection title="特徴タグ" active={!!selectedTags.length}>
+            <button onClick={() => setShowTagDlg(true)} className={selectBtnCls}>
+              特徴タグを選択
+            </button>
+            {selectedTags.length > 0 && (
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {selectedTags.map(id => {
+                  const label = TAG_GROUPS.flatMap(g => g.tags).find(t => t.id === id)?.label ?? id
+                  return (
+                    <span key={id} className="text-[10px] bg-teal-50 text-teal-700 rounded-full px-2 py-0.5">
+                      {label}
+                    </span>
+                  )
+                })}
+              </div>
+            )}
           </FilterSection>
 
           {/* 設立年 */}
@@ -381,6 +420,14 @@ export default function ListsPage() {
           selected={selectedPrefs}
           onConfirm={prefs => setSelectedPrefs(prefs)}
           onClose={() => setShowPrefDlg(false)}
+        />
+      )}
+      {showTagDlg && (
+        <FeatureTagDialog
+          selected={selectedTags}
+          mode={tagMode}
+          onConfirm={(tags, mode) => { setSelectedTags(tags); setTagMode(mode) }}
+          onClose={() => setShowTagDlg(false)}
         />
       )}
       {showSaveDlg && (

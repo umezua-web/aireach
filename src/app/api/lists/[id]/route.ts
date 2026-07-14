@@ -1,19 +1,14 @@
-import { createAdminClient, createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const admin = await createAdminClient()
 
   const { data: list, error: listErr } = await admin
     .from('lists')
     .select('id, name, created_at')
     .eq('id', id)
-    .eq('user_id', user.id)
     .single()
 
   if (listErr) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -43,16 +38,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const admin = await createAdminClient()
-  const { error } = await admin
-    .from('lists')
-    .delete()
-    .eq('id', id)
-    .eq('user_id', user.id)
+  const { error } = await admin.from('lists').delete().eq('id', id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })

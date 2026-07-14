@@ -1,16 +1,11 @@
-import { createAdminClient, createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const admin = await createAdminClient()
   const { data, error } = await admin
     .from('lists')
     .select('id, name, created_at, list_companies(count)')
-    .eq('user_id', user.id)
     .order('created_at', { ascending: false })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -18,10 +13,6 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const { name, houjin_bangous } = await req.json()
   if (!name || !Array.isArray(houjin_bangous)) {
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 })
@@ -31,7 +22,7 @@ export async function POST(req: NextRequest) {
 
   const { data: list, error: listErr } = await admin
     .from('lists')
-    .insert({ name, user_id: user.id })
+    .insert({ name })
     .select('id')
     .single()
 
