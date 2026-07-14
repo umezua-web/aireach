@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { X, Search, ChevronDown, ChevronRight } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { X, Search } from 'lucide-react'
 
 type Props = {
   industryMap: Record<string, string[]>
@@ -14,11 +14,8 @@ type Props = {
 export default function IndustryDialog({ industryMap, selectedMajors, selectedMinors, onConfirm, onClose }: Props) {
   const [localMajors, setLocalMajors] = useState<Set<string>>(new Set(selectedMajors))
   const [localMinors, setLocalMinors] = useState<Set<string>>(new Set(selectedMinors))
-  const [expandedMajors, setExpandedMajors] = useState<Set<string>>(new Set(Object.keys(industryMap)))
-  const [searchKw, setSearchKw] = useState('')
-  const dialogRef = useRef<HTMLDivElement>(null)
+  const [searchKw, setSearchKw]       = useState('')
 
-  // Escキーで閉じる
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', onKey)
@@ -29,12 +26,10 @@ export default function IndustryDialog({ industryMap, selectedMajors, selectedMi
     const minors = industryMap[major] ?? []
     const newMajors = new Set(localMajors)
     const newMinors = new Set(localMinors)
-
     if (newMajors.has(major)) {
       newMajors.delete(major)
     } else {
       newMajors.add(major)
-      // 大分類選択時は配下の小分類チェックを外す
       minors.forEach(m => newMinors.delete(m))
     }
     setLocalMajors(newMajors)
@@ -45,16 +40,13 @@ export default function IndustryDialog({ industryMap, selectedMajors, selectedMi
     const minors = industryMap[major] ?? []
     const newMinors = new Set(localMinors)
     const newMajors = new Set(localMajors)
-
     if (newMinors.has(minor)) {
       newMinors.delete(minor)
       newMajors.delete(major)
     } else {
       newMinors.add(minor)
       newMajors.delete(major)
-      // 全小分類が選ばれたら大分類にまとめる
-      const allSelected = minors.every(m => m === minor || newMinors.has(m))
-      if (allSelected) {
+      if (minors.every(m => m === minor || newMinors.has(m))) {
         minors.forEach(m => newMinors.delete(m))
         newMajors.add(major)
       }
@@ -63,55 +55,45 @@ export default function IndustryDialog({ industryMap, selectedMajors, selectedMi
     setLocalMajors(newMajors)
   }
 
-  function selectAll() {
-    setLocalMajors(new Set(Object.keys(industryMap)))
-    setLocalMinors(new Set())
-  }
-
-  function clearAll() {
-    setLocalMajors(new Set())
-    setLocalMinors(new Set())
-  }
+  function selectAll() { setLocalMajors(new Set(Object.keys(industryMap))); setLocalMinors(new Set()) }
+  function clearAll()  { setLocalMajors(new Set()); setLocalMinors(new Set()) }
 
   function handleConfirm() {
     onConfirm(Array.from(localMajors), Array.from(localMinors))
     onClose()
   }
 
-  const totalSelected = localMajors.size + localMinors.size
-
-  // 検索フィルタ
-  const filteredMap = searchKw
+  const filteredMap: Record<string, string[]> = searchKw
     ? Object.fromEntries(
         Object.entries(industryMap)
           .map(([major, minors]) => {
-            if (major.includes(searchKw)) return [major, minors]
-            const matched = (minors as string[]).filter(m => m.includes(searchKw))
-            return matched.length ? [major, matched] : null
+            if (major.includes(searchKw)) return [major, minors] as [string, string[]]
+            const matched = minors.filter(m => m.includes(searchKw))
+            return matched.length ? [major, matched] as [string, string[]] : null
           })
-          .filter(Boolean) as [string, string[]][]
+          .filter((x): x is [string, string[]] => x !== null)
       )
     : industryMap
 
+  const totalSelected = localMajors.size + localMinors.size
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* オーバーレイ */}
       <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" onClick={onClose} />
 
-      {/* ダイアログ */}
-      <div ref={dialogRef} className="relative bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden mx-4">
+      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden mx-4">
 
         {/* ヘッダー */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
           <h2 className="text-base font-semibold text-gray-900">業種を選択</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
             <X size={18} />
           </button>
         </div>
 
-        {/* 検索 + 全選択 */}
-        <div className="px-6 py-3 border-b border-gray-100 flex items-center gap-3">
-          <div className="relative flex-1">
+        {/* 検索・全選択 */}
+        <div className="px-6 py-3 border-b border-gray-100 flex items-center gap-3 flex-shrink-0">
+          <div className="relative flex-1 max-w-xs">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
@@ -121,64 +103,58 @@ export default function IndustryDialog({ industryMap, selectedMajors, selectedMi
               className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
             />
           </div>
-          <button onClick={selectAll} className="text-xs text-gray-500 hover:text-gray-900 transition-colors whitespace-nowrap">すべて選択</button>
-          <button onClick={clearAll} className="text-xs text-gray-500 hover:text-gray-900 transition-colors whitespace-nowrap">すべて解除</button>
+          <button onClick={selectAll}
+            className="text-xs text-gray-500 hover:text-gray-900 border border-gray-200 rounded-lg px-3 py-1.5 transition-colors whitespace-nowrap">
+            すべて選択する
+          </button>
+          <button onClick={clearAll}
+            className="text-xs text-gray-500 hover:text-gray-900 border border-gray-200 rounded-lg px-3 py-1.5 transition-colors whitespace-nowrap">
+            選択をすべて解除する
+          </button>
         </div>
 
-        {/* 業種リスト */}
-        <div className="flex-1 overflow-y-auto px-2 py-2">
+        {/* 業種グリッド */}
+        <div className="flex-1 overflow-y-auto px-6 py-4">
           {Object.entries(filteredMap).map(([major, minors]) => {
-            const isMajorChecked = localMajors.has(major)
-            const someMinorsChecked = (minors as string[]).some(m => localMinors.has(m))
-            const isExpanded = expandedMajors.has(major)
+            const isMajorChecked   = localMajors.has(major)
+            const someMinorChecked = minors.some(m => localMinors.has(m))
 
             return (
-              <div key={major} className="mb-0.5">
-                {/* 大分類 */}
-                <div className="flex items-center gap-1 px-3 py-2 rounded-lg hover:bg-gray-50 group">
-                  <button
-                    onClick={() => setExpandedMajors(p => {
-                      const n = new Set(p)
-                      n.has(major) ? n.delete(major) : n.add(major)
-                      return n
-                    })}
-                    className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
-                  >
-                    {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                  </button>
-                  <label className="flex items-center gap-2.5 flex-1 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={isMajorChecked}
-                      ref={el => { if (el) el.indeterminate = !isMajorChecked && someMinorsChecked }}
-                      onChange={() => toggleMajor(major)}
-                      className="rounded border-gray-300 text-black focus:ring-black"
-                    />
-                    <span className="text-sm font-semibold text-gray-800">{major}</span>
-                    <span className="text-xs text-gray-400">（{(minors as string[]).length}）</span>
-                  </label>
-                </div>
+              <div key={major} className="mb-5">
+                {/* 大分類ヘッダー */}
+                <label className="flex items-center gap-2 mb-2 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    checked={isMajorChecked}
+                    ref={el => { if (el) el.indeterminate = !isMajorChecked && someMinorChecked }}
+                    onChange={() => toggleMajor(major)}
+                    className="rounded border-gray-300 text-black focus:ring-black"
+                  />
+                  <span className="text-sm font-bold text-gray-800 group-hover:text-black transition-colors">
+                    {major}
+                  </span>
+                </label>
 
-                {/* 小分類 */}
-                {isExpanded && !isMajorChecked && (
-                  <div className="ml-8 mb-1">
-                    {(minors as string[]).map(minor => (
-                      <label key={minor} className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg hover:bg-gray-50 cursor-pointer">
+                {/* 小分類グリッド（3列） */}
+                {!isMajorChecked && (
+                  <div className="grid grid-cols-3 gap-x-4 gap-y-0.5 pl-5">
+                    {minors.map(minor => (
+                      <label key={minor} className="flex items-center gap-2 py-1 cursor-pointer group">
                         <input
                           type="checkbox"
                           checked={localMinors.has(minor)}
                           onChange={() => toggleMinor(minor, major)}
-                          className="rounded border-gray-300 text-black focus:ring-black"
+                          className="rounded border-gray-300 text-black focus:ring-black flex-shrink-0"
                         />
-                        <span className="text-sm text-gray-600">{minor}</span>
+                        <span className="text-xs text-gray-600 group-hover:text-gray-900 transition-colors leading-tight">
+                          {minor}
+                        </span>
                       </label>
                     ))}
                   </div>
                 )}
-                {isExpanded && isMajorChecked && (
-                  <div className="ml-8 mb-1 px-3 py-1">
-                    <span className="text-xs text-gray-400">全小分類が選択されています</span>
-                  </div>
+                {isMajorChecked && (
+                  <p className="pl-5 text-xs text-gray-400">全小分類が選択されています</p>
                 )}
               </div>
             )
@@ -186,7 +162,7 @@ export default function IndustryDialog({ industryMap, selectedMajors, selectedMi
         </div>
 
         {/* フッター */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50">
+        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50 flex-shrink-0">
           <span className="text-sm text-gray-500">
             {totalSelected > 0 ? `${totalSelected} 件選択中` : '未選択'}
           </span>
@@ -197,7 +173,7 @@ export default function IndustryDialog({ industryMap, selectedMajors, selectedMi
             </button>
             <button onClick={handleConfirm}
               className="px-5 py-2 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors">
-              適用する {totalSelected > 0 && `(${totalSelected})`}
+              確定する {totalSelected > 0 && `(${totalSelected})`}
             </button>
           </div>
         </div>
