@@ -11,6 +11,10 @@ export async function GET(req: NextRequest) {
   const revRanges  = p.getAll('rev')
   const noHp       = p.get('no_hp') === '1'
   const noPhone    = p.get('no_phone') === '1'
+  const hpKw       = p.get('hp') ?? ''
+  const phoneKw    = p.get('phone') ?? ''
+  const yearFrom   = p.get('year_from')
+  const yearTo     = p.get('year_to')
   const limit      = Math.min(parseInt(p.get('limit') ?? '200'), 5000)
 
   const supabase = await createAdminClient()
@@ -40,6 +44,10 @@ export async function GET(req: NextRequest) {
   if (revRanges.length) q = q.in('revenue_range', revRanges)
   if (noHp)    q = q.or('hp_url.is.null,hp_url.eq.')
   if (noPhone) q = q.or('phone.is.null,phone.eq.')
+  if (hpKw)     q = q.ilike('hp_url', `%${hpKw}%`)
+  if (phoneKw)  q = q.ilike('phone', `%${phoneKw}%`)
+  if (yearFrom) q = q.gte('founded_year', parseInt(yearFrom))
+  if (yearTo)   q = q.lte('founded_year', parseInt(yearTo))
 
   const { data, count, error } = await q
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

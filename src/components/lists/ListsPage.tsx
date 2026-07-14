@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Search, X, Globe, Phone, Mail, ChevronDown, Download, BookmarkPlus } from 'lucide-react'
+import { X, Globe, Phone, Mail, ChevronDown, ChevronUp, Download, BookmarkPlus } from 'lucide-react'
 import IndustryDialog    from './IndustryDialog'
 import PrefectureDialog  from './PrefectureDialog'
 import SaveListDialog    from './SaveListDialog'
@@ -29,26 +29,57 @@ type FilterOptions = {
   revenue_range: string[]
 }
 
+// アコーディオンセクション
+function FilterSection({ title, active, children, defaultOpen = false }: {
+  title: string
+  active?: boolean
+  children: React.ReactNode
+  defaultOpen?: boolean
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <div className="border-b border-gray-100">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="flex items-center justify-between w-full px-4 py-3 text-left"
+      >
+        <span className="flex items-center gap-1.5 text-sm text-gray-700">
+          <span className={`w-1.5 h-1.5 rounded-full ${active ? 'bg-teal-500' : 'bg-gray-200'}`} />
+          {title}
+        </span>
+        {open ? <ChevronUp size={13} className="text-gray-400" /> : <ChevronDown size={13} className="text-gray-400" />}
+      </button>
+      {open && <div className="px-4 pb-3">{children}</div>}
+    </div>
+  )
+}
+
 export default function ListsPage() {
-  const [inputVal, setInputVal]           = useState('')
-  const [keyword, setKeyword]             = useState('')
+  // 検索条件（入力中の値）
+  const [nameKw, setNameKw]               = useState('')
+  const [hpKw, setHpKw]                   = useState('')
+  const [phoneKw, setPhoneKw]             = useState('')
   const [selectedMajors, setSelectedMajors] = useState<string[]>([])
   const [selectedMinors, setSelectedMinors] = useState<string[]>([])
   const [selectedPrefs, setSelectedPrefs] = useState<string[]>([])
   const [selectedEmps, setSelectedEmps]   = useState<string[]>([])
   const [selectedRevs, setSelectedRevs]   = useState<string[]>([])
+  const [yearFrom, setYearFrom]           = useState('')
+  const [yearTo, setYearTo]               = useState('')
   const [noHp, setNoHp]                   = useState(false)
   const [noPhone, setNoPhone]             = useState(false)
-  const [companies, setCompanies]         = useState<Company[]>([])
-  const [count, setCount]                 = useState<number | null>(null)
-  const [loading, setLoading]             = useState(false)
-  const [filterOpts, setFilterOpts]       = useState<FilterOptions | null>(null)
-  const [showIndustryDlg, setShowIndustryDlg]   = useState(false)
-  const [showPrefDlg, setShowPrefDlg]           = useState(false)
-  const [showEmpDlg, setShowEmpDlg]             = useState(false)
-  const [showRevDlg, setShowRevDlg]             = useState(false)
-  const [showSaveDlg, setShowSaveDlg]           = useState(false)
-  const [savedNotice, setSavedNotice]           = useState('')
+
+  // 結果
+  const [companies, setCompanies] = useState<Company[]>([])
+  const [count, setCount]         = useState<number | null>(null)
+  const [loading, setLoading]     = useState(false)
+  const [searched, setSearched]   = useState(false)
+
+  const [filterOpts, setFilterOpts] = useState<FilterOptions | null>(null)
+  const [showIndustryDlg, setShowIndustryDlg] = useState(false)
+  const [showPrefDlg, setShowPrefDlg]         = useState(false)
+  const [showSaveDlg, setShowSaveDlg]         = useState(false)
+  const [savedNotice, setSavedNotice]         = useState('')
 
   useEffect(() => {
     fetch('/api/filter-options').then(r => r.json()).then(setFilterOpts)
@@ -56,15 +87,20 @@ export default function ListsPage() {
 
   const search = useCallback(async () => {
     setLoading(true)
+    setSearched(true)
     const params = new URLSearchParams()
-    if (keyword) params.set('keyword', keyword)
+    if (nameKw)  params.set('keyword', nameKw)
+    if (hpKw)    params.set('hp', hpKw)
+    if (phoneKw) params.set('phone', phoneKw)
     selectedMajors.forEach(m => params.append('major', m))
     selectedMinors.forEach(m => params.append('minor', m))
     selectedPrefs.forEach(p => params.append('pref', p))
     selectedEmps.forEach(e => params.append('emp', e))
     selectedRevs.forEach(r => params.append('rev', r))
-    if (noHp)    params.set('no_hp', '1')
-    if (noPhone) params.set('no_phone', '1')
+    if (yearFrom) params.set('year_from', yearFrom)
+    if (yearTo)   params.set('year_to', yearTo)
+    if (noHp)     params.set('no_hp', '1')
+    if (noPhone)  params.set('no_phone', '1')
     params.set('limit', '500')
 
     const res = await fetch(`/api/companies?${params}`)
@@ -72,22 +108,19 @@ export default function ListsPage() {
     setCompanies(json.data ?? [])
     setCount(json.count ?? 0)
     setLoading(false)
-  }, [keyword, selectedMajors, selectedMinors, selectedPrefs, selectedEmps, selectedRevs, noHp, noPhone])
+  }, [nameKw, hpKw, phoneKw, selectedMajors, selectedMinors, selectedPrefs, selectedEmps, selectedRevs, yearFrom, yearTo, noHp, noPhone])
 
-  useEffect(() => { search() }, [search])
+  // 初回のみ全件表示
+  useEffect(() => { search() /* eslint-disable-line react-hooks/exhaustive-deps */ }, [])
 
   function clearAll() {
-    setKeyword(''); setInputVal('')
+    setNameKw(''); setHpKw(''); setPhoneKw('')
     setSelectedMajors([]); setSelectedMinors([])
     setSelectedPrefs([]); setSelectedEmps([]); setSelectedRevs([])
+    setYearFrom(''); setYearTo('')
     setNoHp(false); setNoPhone(false)
   }
 
-  function closeDropdowns() {
-    setShowEmpDlg(false); setShowRevDlg(false); setShowPrefDlg(false)
-  }
-
-  // CSV エクスポート
   function exportCsv() {
     const header = ['法人番号','企業名','業種','小分類','都道府県','設立年','従業員数','売上','HP','電話','メール']
     const rows = companies.map(c => [
@@ -105,247 +138,231 @@ export default function ListsPage() {
     URL.revokeObjectURL(url)
   }
 
-  // マイリスト保存
   async function saveList(name: string) {
     const res = await fetch('/api/lists', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name,
-        houjin_bangous: companies.map(c => c.houjin_bangou),
-      }),
+      body: JSON.stringify({ name, houjin_bangous: companies.map(c => c.houjin_bangou) }),
     })
     if (!res.ok) throw new Error('save failed')
     setSavedNotice(`「${name}」に ${companies.length} 社を保存しました`)
     setTimeout(() => setSavedNotice(''), 4000)
   }
 
-  const industryLabel = () => {
-    const total = selectedMajors.length + selectedMinors.length
-    if (total === 0) return '業種'
-    if (total === 1) return selectedMajors[0] ?? selectedMinors[0]
-    return `業種 (${total})`
-  }
-
-  const prefLabel = () => {
-    if (selectedPrefs.length === 0) return '都道府県'
-    if (selectedPrefs.length === 1) return selectedPrefs[0]
-    return `都道府県 (${selectedPrefs.length})`
-  }
-
-  const empLabel = () => {
-    if (selectedEmps.length === 0) return '従業員数'
-    if (selectedEmps.length === 1) return selectedEmps[0]
-    return `従業員数 (${selectedEmps.length})`
-  }
-
-  const revLabel = () => {
-    if (selectedRevs.length === 0) return '売上'
-    if (selectedRevs.length === 1) return selectedRevs[0]
-    return `売上 (${selectedRevs.length})`
-  }
-
-  const hasFilters = keyword || selectedMajors.length || selectedMinors.length ||
-    selectedPrefs.length || selectedEmps.length || selectedRevs.length || noHp || noPhone
-
-  const filterBtn = (active: boolean) =>
-    `flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg border transition-colors ${
-      active
-        ? 'border-black bg-black text-white'
-        : 'border-gray-200 text-gray-700 hover:border-gray-400'
-    }`
+  const industryCount = selectedMajors.length + selectedMinors.length
+  const inputCls = 'w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 placeholder:text-gray-300'
+  const selectBtnCls = 'w-full py-1.5 text-sm text-teal-600 border border-teal-500 rounded-lg hover:bg-teal-50 transition-colors'
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden" onClick={() => closeDropdowns()}>
+    <div className="flex h-screen overflow-hidden">
 
-      {/* トップバー */}
-      <div className="bg-white border-b border-gray-100 px-6 py-3 flex-shrink-0"
-        onClick={e => e.stopPropagation()}>
-        <div className="flex items-center gap-2 flex-wrap">
+      {/* ===== 左：検索条件サイドバー ===== */}
+      <div className="w-64 flex-shrink-0 bg-white border-r border-gray-100 flex flex-col">
+        <div className="px-4 py-3 border-b border-gray-100 flex-shrink-0">
+          <h2 className="text-sm font-semibold text-gray-900">条件検索</h2>
+        </div>
 
-          {/* 企業名検索 */}
-          <div className="relative">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        <div className="flex-1 overflow-y-auto">
+          {/* 企業名 */}
+          <FilterSection title="企業名" active={!!nameKw} defaultOpen>
             <input
-              type="text"
-              value={inputVal}
-              onChange={e => setInputVal(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') setKeyword(inputVal) }}
-              placeholder="企業名で検索"
-              className="pl-8 pr-4 py-2 text-sm border border-gray-200 rounded-lg w-52 focus:outline-none focus:ring-2 focus:ring-black"
+              type="text" value={nameKw}
+              onChange={e => setNameKw(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') search() }}
+              placeholder="企業名を入力..."
+              className={inputCls}
             />
-          </div>
+          </FilterSection>
+
+          {/* ホームページ */}
+          <FilterSection title="ホームページ" active={!!hpKw || noHp}>
+            <input
+              type="text" value={hpKw}
+              onChange={e => setHpKw(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') search() }}
+              placeholder="URLを自由に入力..."
+              className={inputCls}
+            />
+            <label className="flex items-center gap-2 mt-2 cursor-pointer">
+              <input type="checkbox" checked={noHp} onChange={e => setNoHp(e.target.checked)} className="rounded" />
+              <span className="text-xs text-gray-600">HP未登録のみ</span>
+            </label>
+          </FilterSection>
+
+          {/* 所在地 */}
+          <FilterSection title="所在地" active={!!selectedPrefs.length}>
+            <button onClick={() => setShowPrefDlg(true)} className={selectBtnCls}>
+              所在地を選択
+            </button>
+            {selectedPrefs.length > 0 && (
+              <p className="text-xs text-gray-500 mt-1.5">{selectedPrefs.length} 件選択中</p>
+            )}
+          </FilterSection>
+
+          {/* 代表電話番号 */}
+          <FilterSection title="代表電話番号" active={!!phoneKw || noPhone}>
+            <input
+              type="text" value={phoneKw}
+              onChange={e => setPhoneKw(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') search() }}
+              placeholder="電話番号を入力..."
+              className={inputCls}
+            />
+            <label className="flex items-center gap-2 mt-2 cursor-pointer">
+              <input type="checkbox" checked={noPhone} onChange={e => setNoPhone(e.target.checked)} className="rounded" />
+              <span className="text-xs text-gray-600">電話未登録のみ</span>
+            </label>
+          </FilterSection>
 
           {/* 業種 */}
-          <button onClick={() => setShowIndustryDlg(true)} className={filterBtn(!!(selectedMajors.length || selectedMinors.length))}>
-            {industryLabel()} <ChevronDown size={13} />
-          </button>
-
-          {/* 都道府県 */}
-          <button onClick={() => { setShowPrefDlg(true); closeDropdowns() }} className={filterBtn(!!selectedPrefs.length)}>
-            {prefLabel()} <ChevronDown size={13} />
-          </button>
+          <FilterSection title="業種" active={!!industryCount}>
+            <button onClick={() => setShowIndustryDlg(true)} className={selectBtnCls}>
+              業種を選択
+            </button>
+            {industryCount > 0 && (
+              <p className="text-xs text-gray-500 mt-1.5">{industryCount} 件選択中</p>
+            )}
+          </FilterSection>
 
           {/* 従業員数 */}
-          <div className="relative">
-            <button
-              onClick={e => { e.stopPropagation(); setShowEmpDlg(v => !v); setShowRevDlg(false) }}
-              className={filterBtn(!!selectedEmps.length)}
-            >
-              {empLabel()} <ChevronDown size={13} />
-            </button>
-            {showEmpDlg && filterOpts?.employee_range && (
-              <div className="absolute top-full mt-1 left-0 z-40 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-52"
-                onClick={e => e.stopPropagation()}>
-                <div className="flex flex-col gap-0.5">
-                  {filterOpts.employee_range.map(e => (
-                    <label key={e} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer">
-                      <input type="checkbox" checked={selectedEmps.includes(e)}
-                        onChange={ev => setSelectedEmps(prev => ev.target.checked ? [...prev, e] : prev.filter(x => x !== e))}
-                        className="rounded" />
-                      <span className="text-sm text-gray-700">{e}</span>
-                    </label>
-                  ))}
-                </div>
-                <div className="flex justify-end mt-2 pt-2 border-t border-gray-100">
-                  <button onClick={() => setShowEmpDlg(false)}
-                    className="px-3 py-1 bg-black text-white text-xs rounded-lg">適用</button>
-                </div>
-              </div>
-            )}
-          </div>
+          <FilterSection title="従業員数" active={!!selectedEmps.length}>
+            <div className="flex flex-col gap-0.5">
+              {filterOpts?.employee_range?.map(e => (
+                <label key={e} className="flex items-center gap-2 py-1 cursor-pointer">
+                  <input type="checkbox" checked={selectedEmps.includes(e)}
+                    onChange={ev => setSelectedEmps(prev => ev.target.checked ? [...prev, e] : prev.filter(x => x !== e))}
+                    className="rounded" />
+                  <span className="text-xs text-gray-600">{e}</span>
+                </label>
+              ))}
+            </div>
+          </FilterSection>
 
           {/* 売上 */}
-          <div className="relative">
-            <button
-              onClick={e => { e.stopPropagation(); setShowRevDlg(v => !v); setShowEmpDlg(false) }}
-              className={filterBtn(!!selectedRevs.length)}
-            >
-              {revLabel()} <ChevronDown size={13} />
-            </button>
-            {showRevDlg && filterOpts?.revenue_range && (
-              <div className="absolute top-full mt-1 left-0 z-40 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-52"
-                onClick={e => e.stopPropagation()}>
-                <div className="flex flex-col gap-0.5">
-                  {filterOpts.revenue_range.map(r => (
-                    <label key={r} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer">
-                      <input type="checkbox" checked={selectedRevs.includes(r)}
-                        onChange={ev => setSelectedRevs(prev => ev.target.checked ? [...prev, r] : prev.filter(x => x !== r))}
-                        className="rounded" />
-                      <span className="text-sm text-gray-700">{r}</span>
-                    </label>
-                  ))}
-                </div>
-                <div className="flex justify-end mt-2 pt-2 border-t border-gray-100">
-                  <button onClick={() => setShowRevDlg(false)}
-                    className="px-3 py-1 bg-black text-white text-xs rounded-lg">適用</button>
-                </div>
-              </div>
-            )}
-          </div>
+          <FilterSection title="売上" active={!!selectedRevs.length}>
+            <div className="flex flex-col gap-0.5">
+              {filterOpts?.revenue_range?.map(r => (
+                <label key={r} className="flex items-center gap-2 py-1 cursor-pointer">
+                  <input type="checkbox" checked={selectedRevs.includes(r)}
+                    onChange={ev => setSelectedRevs(prev => ev.target.checked ? [...prev, r] : prev.filter(x => x !== r))}
+                    className="rounded" />
+                  <span className="text-xs text-gray-600">{r}</span>
+                </label>
+              ))}
+            </div>
+          </FilterSection>
 
-          {/* HP/電話なし */}
-          <label className={filterBtn(noHp)}>
-            <input type="checkbox" checked={noHp} onChange={e => setNoHp(e.target.checked)} className="sr-only" />
-            HP未登録
-          </label>
-          <label className={filterBtn(noPhone)}>
-            <input type="checkbox" checked={noPhone} onChange={e => setNoPhone(e.target.checked)} className="sr-only" />
-            電話未登録
-          </label>
+          {/* 設立年 */}
+          <FilterSection title="設立年" active={!!(yearFrom || yearTo)}>
+            <div className="flex items-center gap-2">
+              <input
+                type="number" value={yearFrom}
+                onChange={e => setYearFrom(e.target.value)}
+                placeholder="1990"
+                className={`${inputCls} w-20`}
+              />
+              <span className="text-xs text-gray-400">〜</span>
+              <input
+                type="number" value={yearTo}
+                onChange={e => setYearTo(e.target.value)}
+                placeholder="2026"
+                className={`${inputCls} w-20`}
+              />
+            </div>
+          </FilterSection>
+        </div>
 
-          {/* クリア */}
-          {hasFilters && (
-            <button onClick={clearAll}
-              className="flex items-center gap-1 text-sm text-gray-400 hover:text-gray-700 px-2 py-2 transition-colors">
-              <X size={13} /> クリア
-            </button>
+        {/* 下部固定ボタン */}
+        <div className="p-3 border-t border-gray-100 flex flex-col gap-2 flex-shrink-0">
+          <button onClick={clearAll}
+            className="flex items-center justify-center gap-1 w-full py-2 text-sm text-gray-500 border border-gray-200 rounded-lg hover:border-gray-400 hover:text-gray-700 transition-colors">
+            <X size={13} /> 検索条件をクリア
+          </button>
+          <button onClick={search} disabled={loading}
+            className="w-full py-2.5 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 disabled:opacity-50 transition-colors">
+            {loading ? '検索中...' : '検索する'}
+          </button>
+        </div>
+      </div>
+
+      {/* ===== 右：結果テーブル ===== */}
+      <div className="flex-1 flex flex-col overflow-hidden bg-white">
+
+        {/* 結果ヘッダー */}
+        <div className="px-6 py-3 border-b border-gray-100 flex items-center gap-3 flex-shrink-0">
+          {loading ? (
+            <span className="text-sm text-gray-400">検索中...</span>
+          ) : (
+            <span className="text-sm font-medium text-gray-700">
+              {(count ?? 0).toLocaleString()} 社
+            </span>
+          )}
+          {count !== null && count >= 500 && (
+            <span className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded-full">500件表示中</span>
           )}
 
-          {/* 件数 + アクション */}
           <div className="ml-auto flex items-center gap-2">
-            {loading ? (
-              <span className="text-sm text-gray-400">検索中...</span>
-            ) : (
-              <span className="text-sm font-medium text-gray-700">{(count ?? 0).toLocaleString()} 社</span>
-            )}
-            {count !== null && count >= 500 && (
-              <span className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded-full">
-                500件表示中
-              </span>
-            )}
-
-            {/* CSV エクスポート */}
-            <button
-              onClick={exportCsv}
-              disabled={companies.length === 0}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-600 hover:border-gray-400 hover:text-gray-900 disabled:opacity-40 transition-colors"
-            >
+            <button onClick={exportCsv} disabled={companies.length === 0}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-600 hover:border-gray-400 hover:text-gray-900 disabled:opacity-40 transition-colors">
               <Download size={13} /> CSV
             </button>
-
-            {/* リストに保存 */}
-            <button
-              onClick={() => setShowSaveDlg(true)}
-              disabled={companies.length === 0}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm bg-black text-white rounded-lg hover:bg-gray-800 disabled:opacity-40 transition-colors"
-            >
+            <button onClick={() => setShowSaveDlg(true)} disabled={companies.length === 0}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-40 transition-colors">
               <BookmarkPlus size={13} /> リストに保存
             </button>
           </div>
         </div>
 
-        {/* 保存完了通知 */}
         {savedNotice && (
-          <div className="mt-2 text-xs text-green-700 bg-green-50 border border-green-100 rounded-lg px-3 py-2">
+          <div className="mx-6 mt-2 text-xs text-green-700 bg-green-50 border border-green-100 rounded-lg px-3 py-2 flex-shrink-0">
             {savedNotice}
           </div>
         )}
-      </div>
 
-      {/* テーブル */}
-      <div className="flex-1 overflow-auto bg-white">
-        <table className="w-full text-sm">
-          <thead className="sticky top-0 bg-gray-50 border-b border-gray-100 z-10">
-            <tr>
-              {['企業名','業種','小分類','都道府県','設立年','従業員','売上','連絡先'].map(h => (
-                <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 whitespace-nowrap">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {companies.map(c => (
-              <tr key={c.houjin_bangou} className="hover:bg-gray-50 transition-colors">
-                <td className="px-4 py-3 font-medium text-gray-900 max-w-xs truncate">{c.company_name}</td>
-                <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">{c.industry_major}</td>
-                <td className="px-4 py-3 text-gray-400 whitespace-nowrap text-xs">{c.industry_minor}</td>
-                <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">{c.prefecture}</td>
-                <td className="px-4 py-3 text-gray-400 whitespace-nowrap text-xs">{c.founded_year ?? '–'}</td>
-                <td className="px-4 py-3 text-gray-400 whitespace-nowrap text-xs">{c.employee_range ?? '–'}</td>
-                <td className="px-4 py-3 text-gray-400 whitespace-nowrap text-xs">{c.revenue_range ?? '–'}</td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    {c.hp_url && (
-                      <a href={c.hp_url} target="_blank" rel="noopener noreferrer">
-                        <Globe size={13} className="text-blue-400 hover:text-blue-600" />
-                      </a>
-                    )}
-                    {c.phone && <Phone size={13} className="text-green-400" />}
-                    {(c.email || c.contact_url) && <Mail size={13} className="text-purple-400" />}
-                    {!c.hp_url && !c.phone && !c.email && !c.contact_url && (
-                      <span className="text-xs text-gray-300">–</span>
-                    )}
-                  </div>
-                </td>
+        {/* テーブル */}
+        <div className="flex-1 overflow-auto">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 bg-gray-50 border-b border-gray-100 z-10">
+              <tr>
+                {['企業名','業種','小分類','都道府県','設立年','従業員','売上','連絡先'].map(h => (
+                  <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 whitespace-nowrap">{h}</th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
-        {!loading && companies.length === 0 && (
-          <div className="flex items-center justify-center h-40 text-sm text-gray-400">
-            条件に一致する企業がありません
-          </div>
-        )}
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {companies.map(c => (
+                <tr key={c.houjin_bangou} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-4 py-3 font-medium text-gray-900 max-w-xs truncate">{c.company_name}</td>
+                  <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">{c.industry_major}</td>
+                  <td className="px-4 py-3 text-gray-400 whitespace-nowrap text-xs">{c.industry_minor}</td>
+                  <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">{c.prefecture}</td>
+                  <td className="px-4 py-3 text-gray-400 whitespace-nowrap text-xs">{c.founded_year ?? '–'}</td>
+                  <td className="px-4 py-3 text-gray-400 whitespace-nowrap text-xs">{c.employee_range ?? '–'}</td>
+                  <td className="px-4 py-3 text-gray-400 whitespace-nowrap text-xs">{c.revenue_range ?? '–'}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      {c.hp_url && (
+                        <a href={c.hp_url} target="_blank" rel="noopener noreferrer">
+                          <Globe size={13} className="text-blue-400 hover:text-blue-600" />
+                        </a>
+                      )}
+                      {c.phone && <Phone size={13} className="text-green-400" />}
+                      {(c.email || c.contact_url) && <Mail size={13} className="text-purple-400" />}
+                      {!c.hp_url && !c.phone && !c.email && !c.contact_url && (
+                        <span className="text-xs text-gray-300">–</span>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!loading && searched && companies.length === 0 && (
+            <div className="flex items-center justify-center h-40 text-sm text-gray-400">
+              条件に一致する企業がありません
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ダイアログ群 */}
