@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Search, X, Globe, Phone, Mail, ChevronDown } from 'lucide-react'
-import IndustryDialog from './IndustryDialog'
+import { Search, X, Globe, Phone, Mail, ChevronDown, Download, BookmarkPlus } from 'lucide-react'
+import IndustryDialog    from './IndustryDialog'
+import PrefectureDialog  from './PrefectureDialog'
+import SaveListDialog    from './SaveListDialog'
 
 type Company = {
   houjin_bangou: string
@@ -41,10 +43,12 @@ export default function ListsPage() {
   const [count, setCount]                 = useState<number | null>(null)
   const [loading, setLoading]             = useState(false)
   const [filterOpts, setFilterOpts]       = useState<FilterOptions | null>(null)
-  const [showIndustryDlg, setShowIndustryDlg] = useState(false)
-  const [showPrefDlg, setShowPrefDlg]     = useState(false)
-  const [showEmpDlg, setShowEmpDlg]       = useState(false)
-  const [showRevDlg, setShowRevDlg]       = useState(false)
+  const [showIndustryDlg, setShowIndustryDlg]   = useState(false)
+  const [showPrefDlg, setShowPrefDlg]           = useState(false)
+  const [showEmpDlg, setShowEmpDlg]             = useState(false)
+  const [showRevDlg, setShowRevDlg]             = useState(false)
+  const [showSaveDlg, setShowSaveDlg]           = useState(false)
+  const [savedNotice, setSavedNotice]           = useState('')
 
   useEffect(() => {
     fetch('/api/filter-options').then(r => r.json()).then(setFilterOpts)
@@ -79,6 +83,43 @@ export default function ListsPage() {
     setNoHp(false); setNoPhone(false)
   }
 
+  function closeDropdowns() {
+    setShowEmpDlg(false); setShowRevDlg(false); setShowPrefDlg(false)
+  }
+
+  // CSV エクスポート
+  function exportCsv() {
+    const header = ['法人番号','企業名','業種','小分類','都道府県','設立年','従業員数','売上','HP','電話','メール']
+    const rows = companies.map(c => [
+      c.houjin_bangou, c.company_name, c.industry_major, c.industry_minor,
+      c.prefecture, c.founded_year ?? '', c.employee_range ?? '', c.revenue_range ?? '',
+      c.hp_url ?? '', c.phone ?? '', c.email ?? '',
+    ])
+    const csv = [header, ...rows]
+      .map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+      .join('\n')
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href = url; a.download = `aireach_export_${Date.now()}.csv`; a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  // マイリスト保存
+  async function saveList(name: string) {
+    const res = await fetch('/api/lists', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name,
+        houjin_bangous: companies.map(c => c.houjin_bangou),
+      }),
+    })
+    if (!res.ok) throw new Error('save failed')
+    setSavedNotice(`「${name}」に ${companies.length} 社を保存しました`)
+    setTimeout(() => setSavedNotice(''), 4000)
+  }
+
   const industryLabel = () => {
     const total = selectedMajors.length + selectedMinors.length
     if (total === 0) return '業種'
@@ -89,7 +130,7 @@ export default function ListsPage() {
   const prefLabel = () => {
     if (selectedPrefs.length === 0) return '都道府県'
     if (selectedPrefs.length === 1) return selectedPrefs[0]
-    return `${selectedPrefs[0]} 他${selectedPrefs.length - 1}件`
+    return `都道府県 (${selectedPrefs.length})`
   }
 
   const empLabel = () => {
@@ -107,11 +148,19 @@ export default function ListsPage() {
   const hasFilters = keyword || selectedMajors.length || selectedMinors.length ||
     selectedPrefs.length || selectedEmps.length || selectedRevs.length || noHp || noPhone
 
+  const filterBtn = (active: boolean) =>
+    `flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg border transition-colors ${
+      active
+        ? 'border-black bg-black text-white'
+        : 'border-gray-200 text-gray-700 hover:border-gray-400'
+    }`
+
   return (
-    <div className="flex flex-col h-screen overflow-hidden">
+    <div className="flex flex-col h-screen overflow-hidden" onClick={() => closeDropdowns()}>
 
       {/* トップバー */}
-      <div className="bg-white border-b border-gray-100 px-6 py-3 flex-shrink-0">
+      <div className="bg-white border-b border-gray-100 px-6 py-3 flex-shrink-0"
+        onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-2 flex-wrap">
 
           {/* 企業名検索 */}
@@ -128,141 +177,79 @@ export default function ListsPage() {
           </div>
 
           {/* 業種 */}
-          <button
-            onClick={() => setShowIndustryDlg(true)}
-            className={`flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg border transition-colors ${
-              selectedMajors.length || selectedMinors.length
-                ? 'border-black bg-black text-white'
-                : 'border-gray-200 text-gray-700 hover:border-gray-400'
-            }`}
-          >
-            {industryLabel()}
-            <ChevronDown size={13} />
+          <button onClick={() => setShowIndustryDlg(true)} className={filterBtn(!!(selectedMajors.length || selectedMinors.length))}>
+            {industryLabel()} <ChevronDown size={13} />
           </button>
 
           {/* 都道府県 */}
-          <button
-            onClick={() => { setShowPrefDlg(v => !v); setShowEmpDlg(false); setShowRevDlg(false) }}
-            className={`flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg border transition-colors ${
-              selectedPrefs.length
-                ? 'border-black bg-black text-white'
-                : 'border-gray-200 text-gray-700 hover:border-gray-400'
-            }`}
-          >
-            {prefLabel()}
-            <ChevronDown size={13} />
+          <button onClick={() => { setShowPrefDlg(true); closeDropdowns() }} className={filterBtn(!!selectedPrefs.length)}>
+            {prefLabel()} <ChevronDown size={13} />
           </button>
-
-          {/* 都道府県ドロップダウン */}
-          {showPrefDlg && filterOpts?.prefecture && (
-            <div className="absolute top-16 z-40 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-72">
-              <div className="grid grid-cols-4 gap-1 max-h-64 overflow-y-auto">
-                {filterOpts.prefecture.map(p => (
-                  <label key={p} className="flex items-center gap-1 px-2 py-1 rounded hover:bg-gray-50 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={selectedPrefs.includes(p)}
-                      onChange={e => setSelectedPrefs(prev =>
-                        e.target.checked ? [...prev, p] : prev.filter(x => x !== p)
-                      )}
-                      className="rounded"
-                    />
-                    <span className="text-xs text-gray-700">{p.replace('都','').replace('道','').replace('府','').replace('県','')}</span>
-                  </label>
-                ))}
-              </div>
-              <div className="flex justify-end mt-2 pt-2 border-t border-gray-100">
-                <button onClick={() => setShowPrefDlg(false)}
-                  className="px-3 py-1 bg-black text-white text-xs rounded-lg">適用</button>
-              </div>
-            </div>
-          )}
 
           {/* 従業員数 */}
-          <button
-            onClick={() => { setShowEmpDlg(v => !v); setShowRevDlg(false); setShowPrefDlg(false) }}
-            className={`flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg border transition-colors ${
-              selectedEmps.length
-                ? 'border-black bg-black text-white'
-                : 'border-gray-200 text-gray-700 hover:border-gray-400'
-            }`}
-          >
-            {empLabel()}
-            <ChevronDown size={13} />
-          </button>
-
-          {showEmpDlg && filterOpts?.employee_range && (
-            <div className="absolute top-16 z-40 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-52">
-              <div className="flex flex-col gap-0.5">
-                {filterOpts.employee_range.map(e => (
-                  <label key={e} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={selectedEmps.includes(e)}
-                      onChange={ev => setSelectedEmps(prev =>
-                        ev.target.checked ? [...prev, e] : prev.filter(x => x !== e)
-                      )}
-                      className="rounded"
-                    />
-                    <span className="text-sm text-gray-700">{e}</span>
-                  </label>
-                ))}
+          <div className="relative">
+            <button
+              onClick={e => { e.stopPropagation(); setShowEmpDlg(v => !v); setShowRevDlg(false) }}
+              className={filterBtn(!!selectedEmps.length)}
+            >
+              {empLabel()} <ChevronDown size={13} />
+            </button>
+            {showEmpDlg && filterOpts?.employee_range && (
+              <div className="absolute top-full mt-1 left-0 z-40 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-52"
+                onClick={e => e.stopPropagation()}>
+                <div className="flex flex-col gap-0.5">
+                  {filterOpts.employee_range.map(e => (
+                    <label key={e} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer">
+                      <input type="checkbox" checked={selectedEmps.includes(e)}
+                        onChange={ev => setSelectedEmps(prev => ev.target.checked ? [...prev, e] : prev.filter(x => x !== e))}
+                        className="rounded" />
+                      <span className="text-sm text-gray-700">{e}</span>
+                    </label>
+                  ))}
+                </div>
+                <div className="flex justify-end mt-2 pt-2 border-t border-gray-100">
+                  <button onClick={() => setShowEmpDlg(false)}
+                    className="px-3 py-1 bg-black text-white text-xs rounded-lg">適用</button>
+                </div>
               </div>
-              <div className="flex justify-end mt-2 pt-2 border-t border-gray-100">
-                <button onClick={() => setShowEmpDlg(false)}
-                  className="px-3 py-1 bg-black text-white text-xs rounded-lg">適用</button>
-              </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* 売上 */}
-          <button
-            onClick={() => { setShowRevDlg(v => !v); setShowEmpDlg(false); setShowPrefDlg(false) }}
-            className={`flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg border transition-colors ${
-              selectedRevs.length
-                ? 'border-black bg-black text-white'
-                : 'border-gray-200 text-gray-700 hover:border-gray-400'
-            }`}
-          >
-            {revLabel()}
-            <ChevronDown size={13} />
-          </button>
-
-          {showRevDlg && filterOpts?.revenue_range && (
-            <div className="absolute top-16 z-40 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-52">
-              <div className="flex flex-col gap-0.5">
-                {filterOpts.revenue_range.map(r => (
-                  <label key={r} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={selectedRevs.includes(r)}
-                      onChange={ev => setSelectedRevs(prev =>
-                        ev.target.checked ? [...prev, r] : prev.filter(x => x !== r)
-                      )}
-                      className="rounded"
-                    />
-                    <span className="text-sm text-gray-700">{r}</span>
-                  </label>
-                ))}
+          <div className="relative">
+            <button
+              onClick={e => { e.stopPropagation(); setShowRevDlg(v => !v); setShowEmpDlg(false) }}
+              className={filterBtn(!!selectedRevs.length)}
+            >
+              {revLabel()} <ChevronDown size={13} />
+            </button>
+            {showRevDlg && filterOpts?.revenue_range && (
+              <div className="absolute top-full mt-1 left-0 z-40 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-52"
+                onClick={e => e.stopPropagation()}>
+                <div className="flex flex-col gap-0.5">
+                  {filterOpts.revenue_range.map(r => (
+                    <label key={r} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer">
+                      <input type="checkbox" checked={selectedRevs.includes(r)}
+                        onChange={ev => setSelectedRevs(prev => ev.target.checked ? [...prev, r] : prev.filter(x => x !== r))}
+                        className="rounded" />
+                      <span className="text-sm text-gray-700">{r}</span>
+                    </label>
+                  ))}
+                </div>
+                <div className="flex justify-end mt-2 pt-2 border-t border-gray-100">
+                  <button onClick={() => setShowRevDlg(false)}
+                    className="px-3 py-1 bg-black text-white text-xs rounded-lg">適用</button>
+                </div>
               </div>
-              <div className="flex justify-end mt-2 pt-2 border-t border-gray-100">
-                <button onClick={() => setShowRevDlg(false)}
-                  className="px-3 py-1 bg-black text-white text-xs rounded-lg">適用</button>
-              </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* HP/電話なし */}
-          <label className={`flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg border cursor-pointer transition-colors ${
-            noHp ? 'border-black bg-black text-white' : 'border-gray-200 text-gray-700 hover:border-gray-400'
-          }`}>
+          <label className={filterBtn(noHp)}>
             <input type="checkbox" checked={noHp} onChange={e => setNoHp(e.target.checked)} className="sr-only" />
             HP未登録
           </label>
-
-          <label className={`flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg border cursor-pointer transition-colors ${
-            noPhone ? 'border-black bg-black text-white' : 'border-gray-200 text-gray-700 hover:border-gray-400'
-          }`}>
+          <label className={filterBtn(noPhone)}>
             <input type="checkbox" checked={noPhone} onChange={e => setNoPhone(e.target.checked)} className="sr-only" />
             電話未登録
           </label>
@@ -275,7 +262,7 @@ export default function ListsPage() {
             </button>
           )}
 
-          {/* 件数 */}
+          {/* 件数 + アクション */}
           <div className="ml-auto flex items-center gap-2">
             {loading ? (
               <span className="text-sm text-gray-400">検索中...</span>
@@ -284,11 +271,36 @@ export default function ListsPage() {
             )}
             {count !== null && count >= 500 && (
               <span className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded-full">
-                500件表示中 — 絞り込んでください
+                500件表示中
               </span>
             )}
+
+            {/* CSV エクスポート */}
+            <button
+              onClick={exportCsv}
+              disabled={companies.length === 0}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-600 hover:border-gray-400 hover:text-gray-900 disabled:opacity-40 transition-colors"
+            >
+              <Download size={13} /> CSV
+            </button>
+
+            {/* リストに保存 */}
+            <button
+              onClick={() => setShowSaveDlg(true)}
+              disabled={companies.length === 0}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm bg-black text-white rounded-lg hover:bg-gray-800 disabled:opacity-40 transition-colors"
+            >
+              <BookmarkPlus size={13} /> リストに保存
+            </button>
           </div>
         </div>
+
+        {/* 保存完了通知 */}
+        {savedNotice && (
+          <div className="mt-2 text-xs text-green-700 bg-green-50 border border-green-100 rounded-lg px-3 py-2">
+            {savedNotice}
+          </div>
+        )}
       </div>
 
       {/* テーブル */}
@@ -303,7 +315,7 @@ export default function ListsPage() {
           </thead>
           <tbody className="divide-y divide-gray-50">
             {companies.map(c => (
-              <tr key={c.houjin_bangou} className="hover:bg-gray-50 transition-colors cursor-pointer">
+              <tr key={c.houjin_bangou} className="hover:bg-gray-50 transition-colors">
                 <td className="px-4 py-3 font-medium text-gray-900 max-w-xs truncate">{c.company_name}</td>
                 <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">{c.industry_major}</td>
                 <td className="px-4 py-3 text-gray-400 whitespace-nowrap text-xs">{c.industry_minor}</td>
@@ -314,7 +326,7 @@ export default function ListsPage() {
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
                     {c.hp_url && (
-                      <a href={c.hp_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
+                      <a href={c.hp_url} target="_blank" rel="noopener noreferrer">
                         <Globe size={13} className="text-blue-400 hover:text-blue-600" />
                       </a>
                     )}
@@ -336,7 +348,7 @@ export default function ListsPage() {
         )}
       </div>
 
-      {/* 業種ダイアログ */}
+      {/* ダイアログ群 */}
       {showIndustryDlg && filterOpts?.industry_map && (
         <IndustryDialog
           industryMap={filterOpts.industry_map}
@@ -344,6 +356,21 @@ export default function ListsPage() {
           selectedMinors={selectedMinors}
           onConfirm={(majors, minors) => { setSelectedMajors(majors); setSelectedMinors(minors) }}
           onClose={() => setShowIndustryDlg(false)}
+        />
+      )}
+      {showPrefDlg && filterOpts?.prefecture && (
+        <PrefectureDialog
+          allPrefs={filterOpts.prefecture}
+          selected={selectedPrefs}
+          onConfirm={prefs => setSelectedPrefs(prefs)}
+          onClose={() => setShowPrefDlg(false)}
+        />
+      )}
+      {showSaveDlg && (
+        <SaveListDialog
+          count={companies.length}
+          onSave={saveList}
+          onClose={() => setShowSaveDlg(false)}
         />
       )}
     </div>

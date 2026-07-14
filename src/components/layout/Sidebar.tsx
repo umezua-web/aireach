@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import {
   LayoutDashboard,
   List,
+  Bookmark,
   Send,
   GitBranch,
   Settings,
@@ -15,6 +16,7 @@ import {
 const navItems = [
   { href: '/dashboard',  label: 'ダッシュボード', icon: LayoutDashboard },
   { href: '/lists',      label: 'リスト管理',     icon: List },
+  { href: '/mylists',    label: 'マイリスト',     icon: Bookmark },
   { href: '/outbound',   label: 'アウトバウンド', icon: Send },
   { href: '/pipeline',   label: 'パイプライン',   icon: GitBranch },
   { href: '/settings',   label: '設定',           icon: Settings },
